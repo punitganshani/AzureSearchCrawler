@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Abot.Crawler;
 using Abot.Poco;
 
-namespace AzureSearchCrawler
+namespace AzureSearch.Crawler
 {
     /// <summary>
     ///  A convenience wrapper for an Abot crawler with a reasonable default configuration and console logging.
@@ -16,9 +16,9 @@ namespace AzureSearchCrawler
     {
         private static int PageCount = 0;
 
-        private CrawlHandler _handler;
+        private ICrawlHandler _handler;
 
-        public Crawler(CrawlHandler handler)
+        public Crawler(ICrawlHandler handler)
         {
             _handler = handler;
         }
@@ -40,7 +40,6 @@ namespace AzureSearchCrawler
                 Console.WriteLine("Crawl of {0} ({1} pages) completed without error.", result.RootUri.AbsoluteUri, PageCount);
             }
 
-            await _handler.CrawlFinishedAsync();
         }
 
         void crawler_ProcessPageCrawlStarting(object sender, PageCrawlStartingArgs e)
@@ -53,22 +52,26 @@ namespace AzureSearchCrawler
 
         async void crawler_ProcessPageCrawlCompleted(object sender, PageCrawlCompletedArgs e)
         {
-            CrawledPage crawledPage = e.CrawledPage;
-            string uri = crawledPage.Uri.AbsoluteUri;
-
-            if (crawledPage.WebException != null || crawledPage.HttpWebResponse?.StatusCode != HttpStatusCode.OK)
+            try
             {
-                Console.WriteLine("Crawl of page failed {0}: exception '{1}', response status {2}", uri, crawledPage.WebException?.Message, crawledPage.HttpWebResponse?.StatusCode);
-                return;
-            }
+                CrawledPage crawledPage = e.CrawledPage;
+                string uri = crawledPage.Uri.AbsoluteUri;
 
-            if (string.IsNullOrEmpty(crawledPage.Content.Text))
+                if (crawledPage.WebException != null || crawledPage.HttpWebResponse?.StatusCode != HttpStatusCode.OK)
+                {
+                    Console.WriteLine("Crawl of page failed {0}: exception '{1}', response status {2}", uri, crawledPage.WebException?.Message, crawledPage.HttpWebResponse?.StatusCode);
+                    return;
+                }
+
+                if (e.CrawledPage.Uri.IsFile || !string.IsNullOrEmpty(crawledPage.Content.Text))
+                {
+                    await _handler.PageCrawledAsync(crawledPage);
+                }
+            }
+            catch (Exception ex)
             {
-                Console.WriteLine("Page had no content {0}", uri);
-                return;
+                Console.WriteLine(ex.ToString());
             }
-
-            await _handler.PageCrawledAsync(crawledPage);
         }
 
         private CrawlConfiguration CreateCrawlConfiguration(int maxPages)
@@ -80,7 +83,8 @@ namespace AzureSearchCrawler
             crawlConfig.MaxConcurrentThreads = 5;
             crawlConfig.MinCrawlDelayPerDomainMilliSeconds = 100;
             crawlConfig.IsSslCertificateValidationEnabled = true;
-
+            //crawlConfig.DownloadableContentTypes = "text/html, text/plain, application/pdf, application/msword, ";
+            crawlConfig.MaxPageSizeInBytes = 10000000; // 100 MB
             crawlConfig.MaxPagesToCrawl = maxPages;
 
             return crawlConfig;

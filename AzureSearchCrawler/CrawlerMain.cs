@@ -1,7 +1,7 @@
 using System;
 using Fclp;
 
-namespace AzureSearchCrawler
+namespace AzureSearch.Crawler
 {
     /// <summary>
     /// The entry point of the crawler. Adjust the constants at the top and run.
@@ -13,14 +13,10 @@ namespace AzureSearchCrawler
         private class Arguments
         {
             public string RootUri { get; set; }
-
             public int MaxPagesToIndex { get; set; }
-
-            public string ServiceName { get; set; }
-
-            public string IndexName { get; set; }
-
-            public string AdminApiKey { get; set; }
+            public string AccountKey { get; set; }
+            public string AccountName { get; set; }
+            public string SqlConnectionString { get; set; }
         }
 
         static void Main(string[] args)
@@ -37,19 +33,20 @@ namespace AzureSearchCrawler
                 .SetDefault(DefaultMaxPagesToIndex)
                 .WithDescription("Stop after having indexed this many pages. Default is " + DefaultMaxPagesToIndex + "; 0 means no limit.");
 
-            p.Setup(arg => arg.ServiceName)
-                .As('s', "ServiceName")
-                .Required()
-                .WithDescription("The name of your Azure Search service");
+            p.Setup(arg => arg.AccountName)
+              .As('n', "StorageAccountName")
+              .Required()
+              .WithDescription("The name of your Azure Storage Account");
 
-            p.Setup(arg => arg.IndexName)
-                .As('i', "IndexName")
-                .Required()
-                .WithDescription("The name of the index in your Azure Search service");
+            p.Setup(arg => arg.AccountKey)
+             .As('k', "StorageAccountKey")
+             .Required()
+             .WithDescription("The key of your Azure Storage Account");
 
-            p.Setup(arg => arg.AdminApiKey)
-                .As('a', "AdminApiKey")
-                .Required();
+            p.Setup(arg => arg.SqlConnectionString)
+                .As('s', "SqlConnectionString")
+                .Required()
+                .WithDescription("Sql Connection String is required");
 
             p.SetupHelp("?", "h", "help").Callback(text => Console.Error.WriteLine(text));
 
@@ -67,9 +64,8 @@ namespace AzureSearchCrawler
             }
 
             Arguments arguments = p.Object;
-
-            var indexer = new AzureSearchIndexer(arguments.ServiceName, arguments.IndexName, arguments.AdminApiKey, new TextExtractor());
-            var crawler = new Crawler(indexer);
+            var handler = new WebPageHandler(arguments.AccountName, arguments.AccountKey, "search", arguments.SqlConnectionString);
+            var crawler = new Crawler(handler);
             crawler.Crawl(arguments.RootUri, maxPages: arguments.MaxPagesToIndex).Wait();
 
             Console.Read(); // keep console open until a button is pressed so we see the output
